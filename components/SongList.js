@@ -1,16 +1,16 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Play, Loader2, AlertCircle, Volume2 } from 'lucide-react'
+import { Play, Loader2, AlertCircle, Volume2, Inbox } from 'lucide-react'
 import { usePlayer } from '../lib/playerContext'
 import { getSessionId } from '../lib/sessionId'
 import LikeButton from './LikeButton'
 
-const SongList = () => {
+const SongList = ({ query = '' }) => {
   const { currentSong, isPlaying, setQueueAndPlay } = usePlayer()
   const [songs, setSongs]   = useState([])
-  const [counts, setCounts] = useState({})   // { song_id: n }
-  const [mine, setMine]     = useState(new Set()) // Set<song_id>
+  const [counts, setCounts] = useState({})
+  const [mine, setMine]     = useState(new Set())
   const [status, setStatus] = useState('loading')
   const [error, setError]   = useState(null)
 
@@ -27,30 +27,33 @@ const SongList = () => {
       ])
       const sJ = await sR.json()
       if (!sR.ok) throw new Error(sJ?.error || 'songs failed')
-
       const cJ = cR.ok ? await cR.json() : { counts: {} }
       const mJ = mR && mR.ok ? await mR.json() : { song_ids: [] }
-
       setSongs(sJ.songs || [])
       setCounts(cJ.counts || {})
       setMine(new Set(mJ.song_ids || []))
       setStatus((sJ.songs || []).length === 0 ? 'empty' : 'ready')
     } catch (e) {
-      setError(e.message)
-      setStatus('error')
+      setError(e.message); setStatus('error')
     }
   }, [])
-
   useEffect(() => { loadAll() }, [loadAll])
 
-  const handlePlay = (index) => setQueueAndPlay(songs, index)
+  const q = (query || '').trim().toLowerCase()
+  const filtered = q
+    ? songs.filter((s) => (s.title || '').toLowerCase().includes(q))
+    : songs
+
+  const handlePlay = (visibleIndex) => {
+    // Play from the FILTERED queue, so next/prev stays within the visible list
+    setQueueAndPlay(filtered, visibleIndex)
+  }
 
   const handleLikeChange = (songId, json) => {
     setCounts((c) => ({ ...c, [songId]: typeof json.count === 'number' ? json.count : (c[songId] || 0) }))
     setMine((prev) => {
       const n = new Set(prev)
-      if (json.liked) n.add(songId)
-      else            n.delete(songId)
+      if (json.liked) n.add(songId); else n.delete(songId)
       return n
     })
   }
@@ -62,12 +65,24 @@ const SongList = () => {
     <div className="am-state am-state--error"><AlertCircle size={16} /><span>Could not load songs: {error}</span></div>
   )
   if (status === 'empty') return (
-    <div className="am-state"><span>No songs yet. Upload one from the admin dashboard.</span></div>
+    <div className="am-state am-state--empty">
+      <Inbox size={18} />
+      <div>
+        <div style={{ fontWeight: 600, color: 'var(--am-text)' }}>No songs yet</div>
+        <div>Upload your first track from the <a href="/admin">admin dashboard</a>.</div>
+      </div>
+    </div>
+  )
+  if (filtered.length === 0) return (
+    <div className="am-state am-state--empty">
+      <Inbox size={18} />
+      <span>No matches for “{query}”.</span>
+    </div>
   )
 
   return (
     <ul className="am-songlist">
-      {songs.map((s, i) => {
+      {filtered.map((s, i) => {
         const active = currentSong?.id === s.id
         return (
           <li

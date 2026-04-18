@@ -914,6 +914,79 @@ p {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Comments                                                                    */
+/* -------------------------------------------------------------------------- */
+.am-comments { margin-top: 32px; }
+
+.am-comment-form {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 10px;
+  padding: 14px;
+  background: var(--am-bg-elev);
+  border: 1px solid var(--am-border-soft);
+  border-radius: var(--am-radius);
+  margin-bottom: 16px;
+}
+.am-comment-form .am-input { grid-column: 1; grid-row: 1; }
+.am-textarea {
+  grid-column: 2; grid-row: 1 / span 2;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--am-radius-sm);
+  border: 1px solid var(--am-border);
+  background: var(--am-surface);
+  color: var(--am-text);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  resize: vertical;
+  min-height: 60px;
+  transition: border-color .15s ease, background .15s ease;
+}
+.am-textarea:focus { border-color: var(--am-accent); background: var(--am-bg-elev-2); }
+
+.am-comment-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.am-warn { color: #fca5a5; }
+
+.am-comment-list {
+  list-style: none;
+  padding: 0; margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.am-comment {
+  padding: 12px 14px;
+  background: var(--am-bg-elev);
+  border: 1px solid var(--am-border-soft);
+  border-radius: var(--am-radius-sm);
+  animation: am-fade-in .28s ease;
+}
+.am-comment__meta {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.am-comment__author { color: var(--am-accent); font-weight: 600; }
+.am-comment__body { font-size: 14px; color: var(--am-text); word-wrap: break-word; }
+
+/* Empty state variant */
+.am-state--empty {
+  color: var(--am-text-muted);
+  border-style: dashed;
+  background: var(--am-bg-elev);
+}
+.am-state--empty a { color: var(--am-accent); text-decoration: underline; }
+
+/* -------------------------------------------------------------------------- */
 /* Responsive                                                                  */
 /* -------------------------------------------------------------------------- */
 @media (max-width: 900px) {
@@ -924,5 +997,58 @@ p {
       "player";
   }
   .am-sidebar { display: none; }
-  .am-main-inner { padding: 20px; }
+  .am-main-inner { padding: 20px 16px 24px; }
+  .am-hero { padding: 16px 0 4px; }
+  .am-h1 { font-size: 22px; }
+  .am-h2 { font-size: 18px; }
+
+  .am-topbar__search { max-width: none; font-size: 14px; }
+  .am-topbar__actions .am-btn { padding: 8px 14px; font-size: 12px; }
+
+  /* Compact song rows */
+  .am-songlist__item {
+    grid-template-columns: 28px 1fr auto;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .am-songlist__index { font-size: 12px; }
+  .am-like { padding: 5px 8px; }
+
+  /* Comments stack vertically */
+  .am-comment-form {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+  .am-textarea { grid-column: 1; grid-row: 2; min-height: 80px; }
+  .am-comment-form .am-input { grid-column: 1; grid-row: 1; }
+
+  /* Player bar: hide volume slider, shrink meta */
+  .am-player { padding: 0 10px; gap: 8px; }
+  .am-player__left { flex: 0 0 auto; min-width: 0; max-width: 40%; }
+  .am-player__meta { gap: 8px; }
+  .am-player__cover { width: 44px; height: 44px; }
+  .am-player__title { font-size: 13px; }
+  .am-player__artist { font-size: 11px; }
+
+  .am-player__center { flex: 1; }
+  .am-player__controls { gap: 10px; }
+  .am-player__progress { display: none; }   /* hide on tiny screens */
+
+  .am-player__right { flex: 0 0 auto; gap: 4px; }
+  .am-player__volume { display: none; }
+
+  /* Admin dashboard */
+  .am-admin__topbar { flex-wrap: wrap; padding: 10px 14px; gap: 10px; }
+  .am-admin__tabs { order: 3; width: 100%; justify-content: flex-start; overflow-x: auto; }
+  .am-admin__main { padding: 16px; }
+  .am-upload { grid-template-columns: 1fr; }
+  .am-stats { grid-template-columns: 1fr; }
+  .am-table { font-size: 12px; }
+  .am-table th, .am-table td { padding: 8px 10px; }
 }
+
+@media (max-width: 560px) {
+  .am-admin__tabs .am-tab span { display: none; }   /* icon-only tabs on phones */
+  .am-hero__badge { font-size: 10px; }
+}
+
