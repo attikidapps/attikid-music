@@ -1,70 +1,69 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Play, Loader2, AlertCircle, Volume2 } from 'lucide-react'
 import { usePlayer } from '../lib/playerContext'
+import { getSessionId } from '../lib/sessionId'
+import LikeButton from './LikeButton'
 
 const SongList = () => {
   const { currentSong, isPlaying, setQueueAndPlay } = usePlayer()
   const [songs, setSongs]   = useState([])
-  const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error' | 'empty'
+  const [counts, setCounts] = useState({})   // { song_id: n }
+  const [mine, setMine]     = useState(new Set()) // Set<song_id>
+  const [status, setStatus] = useState('loading')
   const [error, setError]   = useState(null)
 
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        setStatus('loading')
-        const res = await fetch('/api/songs', { cache: 'no-store' })
-        const json = await res.json()
-        if (cancelled) return
-        if (!res.ok) {
-          setError(json?.error || `HTTP ${res.status}`)
-          setStatus('error')
-          return
-        }
-        setSongs(json.songs || [])
-        setStatus((json.songs || []).length === 0 ? 'empty' : 'ready')
-      } catch (e) {
-        if (cancelled) return
-        setError(e.message)
-        setStatus('error')
-      }
+  const loadAll = useCallback(async () => {
+    try {
+      setStatus('loading')
+      const session_id = getSessionId()
+      const [sR, cR, mR] = await Promise.all([
+        fetch('/api/songs', { cache: 'no-store' }),
+        fetch('/api/likes/counts', { cache: 'no-store' }),
+        session_id
+          ? fetch(`/api/likes/session?session_id=${encodeURIComponent(session_id)}`, { cache: 'no-store' })
+          : Promise.resolve(null),
+      ])
+      const sJ = await sR.json()
+      if (!sR.ok) throw new Error(sJ?.error || 'songs failed')
+
+      const cJ = cR.ok ? await cR.json() : { counts: {} }
+      const mJ = mR && mR.ok ? await mR.json() : { song_ids: [] }
+
+      setSongs(sJ.songs || [])
+      setCounts(cJ.counts || {})
+      setMine(new Set(mJ.song_ids || []))
+      setStatus((sJ.songs || []).length === 0 ? 'empty' : 'ready')
+    } catch (e) {
+      setError(e.message)
+      setStatus('error')
     }
-    load()
-    return () => { cancelled = true }
   }, [])
 
-  const handlePlay = (index) => {
-    // Use the current rendered order as the queue
-    setQueueAndPlay(songs, index)
+  useEffect(() => { loadAll() }, [loadAll])
+
+  const handlePlay = (index) => setQueueAndPlay(songs, index)
+
+  const handleLikeChange = (songId, json) => {
+    setCounts((c) => ({ ...c, [songId]: typeof json.count === 'number' ? json.count : (c[songId] || 0) }))
+    setMine((prev) => {
+      const n = new Set(prev)
+      if (json.liked) n.add(songId)
+      else            n.delete(songId)
+      return n
+    })
   }
 
-  if (status === 'loading') {
-    return (
-      <div className="am-state">
-        <Loader2 size={16} className="am-spin" />
-        <span>Loading songs…</span>
-      </div>
-    )
-  }
-
-  if (status === 'error') {
-    return (
-      <div className="am-state am-state--error">
-        <AlertCircle size={16} />
-        <span>Could not load songs: {error}</span>
-      </div>
-    )
-  }
-
-  if (status === 'empty') {
-    return (
-      <div className="am-state">
-        <span>No songs yet. Seed your <code>songs</code> table in Supabase.</span>
-      </div>
-    )
-  }
+  if (status === 'loading') return (
+    <div className="am-state"><Loader2 size={16} className="am-spin" /><span>Loading songs…</span></div>
+  )
+  if (status === 'error') return (
+    <div className="am-state am-state--error"><AlertCircle size={16} /><span>Could not load songs: {error}</span></div>
+  )
+  if (status === 'empty') return (
+    <div className="am-state"><span>No songs yet. Upload one from the admin dashboard.</span></div>
+  )
 
   return (
     <ul className="am-songlist">
@@ -87,9 +86,12 @@ const SongList = () => {
                 : String(i + 1).padStart(2, '0')}
             </span>
             <span className="am-songlist__title">{s.title}</span>
-            <span className="am-songlist__plays am-dim">
-              {typeof s.plays === 'number' ? `${s.plays} plays` : ''}
-            </span>
+            <LikeButton
+              songId={s.id}
+              initialCount={counts[s.id] || 0}
+              initialLiked={mine.has(s.id)}
+              onChange={(json) => handleLikeChange(s.id, json)}
+            />
           </li>
         )
       })}
