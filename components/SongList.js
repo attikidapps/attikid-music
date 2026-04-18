@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Play, Loader2, AlertCircle } from 'lucide-react'
+import { Play, Loader2, AlertCircle, Volume2 } from 'lucide-react'
 import { usePlayer } from '../lib/playerContext'
 
 const SongList = () => {
-  const { currentSong, playSong } = usePlayer()
+  const { currentSong, isPlaying, setQueueAndPlay } = usePlayer()
   const [songs, setSongs]   = useState([])
   const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error' | 'empty'
   const [error, setError]   = useState(null)
@@ -35,9 +35,14 @@ const SongList = () => {
     return () => { cancelled = true }
   }, [])
 
+  const handlePlay = (index) => {
+    // Use the current rendered order as the queue
+    setQueueAndPlay(songs, index)
+  }
+
   if (status === 'loading') {
     return (
-      <div className="am-state am-state--loading">
+      <div className="am-state">
         <Loader2 size={16} className="am-spin" />
         <span>Loading songs…</span>
       </div>
@@ -56,7 +61,7 @@ const SongList = () => {
   if (status === 'empty') {
     return (
       <div className="am-state">
-        <span>No songs yet. Once the <code>songs</code> table is seeded in Supabase, they’ll appear here.</span>
+        <span>No songs yet. Seed your <code>songs</code> table in Supabase.</span>
       </div>
     )
   }
@@ -69,14 +74,16 @@ const SongList = () => {
           <li
             key={s.id}
             className={`am-songlist__item ${active ? 'am-songlist__item--active' : ''}`}
-            onClick={() => playSong(s)}
+            onClick={() => handlePlay(i)}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') playSong(s) }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handlePlay(i) }}
           >
             <span className="am-songlist__index">
               {active
-                ? <Play size={14} fill="currentColor" />
+                ? (isPlaying
+                    ? <Volume2 size={14} className="am-pulse" />
+                    : <Play size={14} fill="currentColor" />)
                 : String(i + 1).padStart(2, '0')}
             </span>
             <span className="am-songlist__title">{s.title}</span>
