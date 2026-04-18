@@ -288,28 +288,46 @@ async function handleRoute(request, { params }) {
     }
 
     if (route === '/admin/songs' && method === 'POST') {
-      const ct = request.headers.get('content-type') || ''
-      if (!ct.includes('multipart/form-data')) return err('Expected multipart/form-data', 400)
-      const form = await request.formData()
-      const file = form.get('file')
-      const title = (form.get('title') || '').toString().trim().slice(0, 200)
-      if (!file || typeof file === 'string') return err('file is required', 400)
-      if (!title) return err('title is required', 400)
-      const admin = getAdminClient()
-      await admin.storage.createBucket('songs', { public: true }).catch(() => {})
-      const safe = (file.name || 'upload.mp3').replace(/[^a-zA-Z0-9._-]/g, '_')
-      const path = `${Date.now().toString(36)}-${safe}`
-      const arrayBuf = await file.arrayBuffer()
-      const { error: upErr } = await admin.storage.from('songs').upload(path, arrayBuf, {
-        contentType: file.type || 'audio/mpeg', upsert: false,
-      })
-      if (upErr) return err(`Upload failed: ${upErr.message}`, 500)
-      const { data: pub } = admin.storage.from('songs').getPublicUrl(path)
-      const { data: inserted, error: insErr } = await admin.from('songs')
-        .insert({ title, file_url: pub.publicUrl })
-        .select('id, title, file_url, plays, created_at').single()
+      // JSON-only: receives metadata AFTER the client has uploaded directly
+      // to Supabase Storage via a signed upload URL. No file bytes transit
+      // through this route (Vercel 4.5MB body limit compatibility).
+      const body = await readJson(request)
+      const title = typeof body?.title === 'string' ? body.title.trim().slice(0, 200) : ''
+      const file_url = typeof body?.file_url === 'string' ? body.file_url.trim() : ''
+      if (!title)    return err('title is required', 400)
+      if (!file_url) return err('file_url is required', 400)
+      if (!/^https?:\/\//i.test(file_url)) return err('file_url must be an http(s) URL', 400)
+
+      const { data: inserted, error: insErr } = await getAdminClient()
+        .from('songs')
+        .insert({ title, file_url })
+        .select('id, title, file_url, plays, created_at')
+        .single()
       if (insErr) return err(insErr.message, 500)
       return json({ song: inserted }, 201)
+    }
+
+    // Issues a signed upload URL so the browser can PUT the file directly
+    // to Supabase Storage. Admin-only (the /admin/ guard above already ran).
+    if (route === '/admin/songs/upload-url' && method === 'POST') {
+      const body = await readJson(request)
+      const rawName = typeof body?.filename === 'string' ? body.filename : 'upload.mp3'
+      const safe = rawName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80) || 'upload.mp3'
+      const path = `${Date.now().toString(36)}-${safe}`
+
+      const admin = getAdminClient()
+      await admin.storage.createBucket('songs', { public: true }).catch(() => {})
+
+      const { data, error } = await admin.storage.from('songs').createSignedUploadUrl(path)
+      if (error) return err(`Could not create upload URL: ${error.message}`, 500)
+
+      const { data: pub } = admin.storage.from('songs').getPublicUrl(path)
+      return json({
+        path:      data.path,
+        token:     data.token,
+        signedUrl: data.signedUrl,
+        publicUrl: pub.publicUrl,
+      })
     }
 
     const songIdMatch = route.match(/^\/admin\/songs\/([0-9a-fA-F-]{36})$/)

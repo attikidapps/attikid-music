@@ -14,6 +14,7 @@ import {
   Music2,
   AlertCircle,
 } from 'lucide-react'
+import { supabase } from '../../lib/supabaseClient'
 
 const tabs = [
   { id: 'songs',     label: 'Songs',     icon: <Music2 size={15} /> },
@@ -203,19 +204,59 @@ function SongsPanel() {
     if (!file || !title.trim()) { setUploadErr('Title and file are required'); return }
     setUploading(true)
     try {
-      const fd = new FormData()
-      fd.append('title', title.trim())
-      fd.append('file', file)
-      const r = await fetch('/api/admin/songs', { method: 'POST', body: fd })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j?.error || 'Upload failed')
+      // -------------------------------------------------------------------
+      // 1. Ask our admin API for a signed upload URL (admin-only endpoint).
+      //    No file bytes touch the API route — just a filename string.
+      // -------------------------------------------------------------------
+      const urlRes = await fetch('/api/admin/songs/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name }),
+      })
+      let urlJson = null
+      try { urlJson = await urlRes.json() } catch { /* non-JSON response */ }
+      if (!urlRes.ok || !urlJson?.token || !urlJson?.path) {
+        throw new Error(urlJson?.error || `Could not get upload URL (HTTP ${urlRes.status})`)
+      }
+
+      // -------------------------------------------------------------------
+      // 2. Upload the file DIRECTLY to Supabase Storage from the browser.
+      //    This bypasses Vercel's 4.5MB serverless body limit entirely.
+      // -------------------------------------------------------------------
+      const { error: upErr } = await supabase
+        .storage
+        .from('songs')
+        .uploadToSignedUrl(urlJson.path, urlJson.token, file, {
+          contentType: file.type || 'audio/mpeg',
+        })
+      if (upErr) {
+        alert(`Upload failed: ${upErr.message}`)
+        throw upErr
+      }
+
+      // -------------------------------------------------------------------
+      // 3. Only the METADATA goes to our backend (title + public file_url).
+      // -------------------------------------------------------------------
+      const saveRes = await fetch('/api/admin/songs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title.trim(), file_url: urlJson.publicUrl }),
+      })
+      let saveJson = null
+      try { saveJson = await saveRes.json() } catch { /* swallow */ }
+      if (!saveRes.ok) {
+        console.error('Metadata save failed:', saveJson)
+        throw new Error(saveJson?.error || `Could not save song (HTTP ${saveRes.status})`)
+      }
+
+      // Reset form
       setTitle(''); setFile(null)
-      // reset file input
       const input = document.getElementById('am-file-input')
       if (input) input.value = ''
       await load()
     } catch (e) {
-      setUploadErr(e.message)
+      console.error('[admin upload]', e)
+      setUploadErr(e.message || 'Upload failed')
     } finally {
       setUploading(false)
     }
