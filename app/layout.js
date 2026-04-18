@@ -1,4 +1,5 @@
 import '../styles/globals.css'
+import Providers from '../components/Providers'
 
 export const metadata = {
   title: 'Attikid Music',
@@ -20,7 +21,9 @@ export default function RootLayout({ children }) {
           }}
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   )
 }
