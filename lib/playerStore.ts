@@ -106,4 +106,8 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   addToQueue: (track) => set((s) => ({ queue: [...s.queue, track] })),
   setPosition: (position) => set({ position }),
   setDuration: (duration) => set({ duration }),
+}));    })),
+  addToQueue: (track) => set((s) => ({ queue: [...s.queue, track] })),
+  setPosition: (position) => set({ position }),
+  setDuration: (duration) => set({ duration }),
 }));
