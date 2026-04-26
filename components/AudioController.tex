@@ -1,0 +1,65 @@
+'use client';
+import { useEffect, useRef } from 'react';
+import { usePlayer } from '@/lib/player-store';
+
+let audioInstance: HTMLAudioElement | null = null;
+
+export function getAudioElement() {
+  return audioInstance;
+}
+
+export function seekAudio(seconds: number) {
+  if (audioInstance) audioInstance.currentTime = seconds;
+}
+
+export function AudioController() {
+  const ref = useRef<HTMLAudioElement | null>(null);
+  const { current, isPlaying, volume, muted, setPosition, setDuration, next } =
+    usePlayer();
+
+  useEffect(() => {
+    if (!ref.current) {
+      const a = new Audio();
+      a.crossOrigin = 'anonymous'; // required for visualizer + color extraction
+      ref.current = a;
+      audioInstance = a;
+    }
+  }, []);
+
+  useEffect(() => {
+    const a = ref.current;
+    if (!a || !current) return;
+    a.src = current.url;
+    a.load();
+    if (isPlaying) a.play().catch(() => {});
+  }, [current?.id]);
+
+  useEffect(() => {
+    const a = ref.current;
+    if (!a) return;
+    if (isPlaying) a.play().catch(() => {});
+    else a.pause();
+  }, [isPlaying]);
+
+  useEffect(() => {
+    if (ref.current) ref.current.volume = muted ? 0 : volume;
+  }, [volume, muted]);
+
+  useEffect(() => {
+    const a = ref.current;
+    if (!a) return;
+    const onTime = () => setPosition(a.currentTime);
+    const onMeta = () => setDuration(a.duration || 0);
+    const onEnd = () => next();
+    a.addEventListener('timeupdate', onTime);
+    a.addEventListener('loadedmetadata', onMeta);
+    a.addEventListener('ended', onEnd);
+    return () => {
+      a.removeEventListener('timeupdate', onTime);
+      a.removeEventListener('loadedmetadata', onMeta);
+      a.removeEventListener('ended', onEnd);
+    };
+  }, [next, setPosition, setDuration]);
+
+  return null;
+}
